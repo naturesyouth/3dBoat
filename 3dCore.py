@@ -1,26 +1,93 @@
-import pyglet
-import ratcave as rc
+# Basic OBJ file viewer. needs objloader from:
+#  http://www.pygame.org/wiki/OBJFileLoader
+# LMB + move: rotate
+# RMB + move: pan
+# Scroll wheel: zoom in/out
+import sys, pygame
+from pygame.locals import *
+from pygame.constants import *
+from OpenGL.GL import *
+from OpenGL.GLU import *
+import math
 
-# Create Window
-window = pyglet.window.Window()
+# IMPORT OBJECT LOADER
+from objLoader import *
 
-def update(dt):
-    pass
-pyglet.clock.schedule(update)
+pygame.init()
+viewport = (800,600)
+radius = 400
+theta = 0
+hx = viewport[0]/2
+hy = viewport[1]/2
+srf = pygame.display.set_mode(viewport, OPENGL | DOUBLEBUF)
 
-# Insert filename into WavefrontReader.
-obj_filename = rc.resources.obj_primitives
-obj_reader = rc.WavefrontReader(obj_filename)
+glLightfv(GL_LIGHT0, GL_POSITION,  (-40, 200, 100, 0.0))
+glLightfv(GL_LIGHT0, GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
+glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.5, 0.5, 0.5, 1.0))
+glEnable(GL_LIGHT0)
+glEnable(GL_LIGHTING)
+glEnable(GL_COLOR_MATERIAL)
+glEnable(GL_DEPTH_TEST)
+glShadeModel(GL_SMOOTH)           # most obj files expect to be smooth-shaded
 
-# Create Mesh
-monkey = obj_reader.get_mesh("Monkey")
-monkey.position = 0, 0, -2
+# LOAD OBJECT AFTER PYGAME INIT
+obj = OBJ(sys.argv[1], swapyz=True)
 
-# Create Scene
-scene = rc.Scene(meshes=[monkey])
+clock = pygame.time.Clock()
 
-@window.event
-def on_draw():
-    scene.draw()
+glMatrixMode(GL_PROJECTION)
+glLoadIdentity()
+width, height = viewport
+gluPerspective(90.0, width/float(height), 1, 10000000.0)
+glEnable(GL_DEPTH_TEST)
+glMatrixMode(GL_MODELVIEW)
+glRotate(90, 1, 0, 0)
 
-pyglet.app.run()
+rx, ry = (0,0)
+tx, ty = (0,0)
+zpos = 0
+rotate = move = False
+
+while 1:
+    clock.tick(30)
+    for e in pygame.event.get():
+        pass
+        if e.type == QUIT:
+            sys.exit()
+        elif e.type == KEYDOWN and e.key == K_ESCAPE:
+            sys.exit()
+        elif e.type == MOUSEBUTTONDOWN:
+            if e.button == 4: zpos = max(1, zpos-1)
+            elif e.button == 5: zpos += 1
+            elif e.button == 1: rotate = True
+            elif e.button == 3: move = True
+        elif e.type == MOUSEBUTTONUP:
+            if e.button == 1: rotate = False
+            elif e.button == 3: move = False
+        elif e.type == MOUSEMOTION:
+            i, j = e.rel
+            if rotate:
+                rx += i
+                ry += j
+            if move:
+                tx += i
+                ty -= j
+
+    theta += 1
+    tx = math.sin(radius*theta)
+    ty = math.cos(radius*theta)
+
+    #zpos -= 100
+    rx += 10
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glLoadIdentity()
+
+    # RENDER OBJECT
+    glRotate(ry, 1, 0, 0)
+    glRotate(rx, 0, 1, 0)
+    glScalef(.001,.001,.001);
+    glTranslate(tx, ty, - zpos)
+    glCallList(obj.gl_list)
+
+    pygame.display.flip()
